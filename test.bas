@@ -1,0 +1,7 @@
+10 LET X = 10
+20 LET T = 1
+30 IF X <= 1 THEN 70
+40 LET T = T * X
+50 LET X = X - 1
+60 GOTO 30
+70 PRINT T
