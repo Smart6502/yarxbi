@@ -9,7 +9,7 @@ use std::str::FromStr;
 #[derive(Debug, Clone)]
 pub enum Value {
     String(String),
-    Number(i32),
+    Number(f64),
     Bool(bool),
 }
 
@@ -51,7 +51,7 @@ impl Add for Value {
                 Ok(Value::String(format!("{}{}", string1, string2)))
             }
             (Value::Number(number1), Value::String(string2)) => {
-                let number2 = i32::from_str(string2.as_str());
+                let number2 = f64::from_str(string2.as_str());
 
                 if let Result::Ok(number2_value) = number2 {
                     Ok(Value::Number(number1 + number2_value))
@@ -63,7 +63,7 @@ impl Add for Value {
                 }
             }
             (Value::String(string1), Value::Number(number2)) => {
-                let number1 = i32::from_str(string1.as_str());
+                let number1 = f64::from_str(string1.as_str());
 
                 if let Result::Ok(number1_value) = number1 {
                     Ok(Value::Number(number1_value + number2))
@@ -88,7 +88,7 @@ impl Div for Value {
                 Ok(Value::Number(number1 / number2))
             }
             (Value::Number(number1), Value::String(string2)) => {
-                let number2 = i32::from_str(string2.as_str());
+                let number2 = f64::from_str(string2.as_str());
 
                 if let Result::Ok(number2_value) = number2 {
                     Ok(Value::Number(number1 / number2_value))
@@ -100,7 +100,7 @@ impl Div for Value {
                 }
             }
             (Value::String(string1), Value::Number(number2)) => {
-                let number1 = i32::from_str(string1.as_str());
+                let number1 = f64::from_str(string1.as_str());
 
                 if let Result::Ok(number1_value) = number1 {
                     Ok(Value::Number(number1_value / number2))
@@ -125,7 +125,7 @@ impl Mul for Value {
                 Ok(Value::Number(number1 * number2))
             }
             (Value::Number(number1), Value::String(string2)) => {
-                let number2 = i32::from_str(string2.as_str());
+                let number2 = f64::from_str(string2.as_str());
 
                 if let Result::Ok(number2_value) = number2 {
                     Ok(Value::Number(number1 * number2_value))
@@ -137,7 +137,7 @@ impl Mul for Value {
                 }
             }
             (Value::String(string1), Value::Number(number2)) => {
-                let number1 = i32::from_str(string1.as_str());
+                let number1 = f64::from_str(string1.as_str());
 
                 if let Result::Ok(number1_value) = number1 {
                     Ok(Value::Number(number1_value * number2))
@@ -162,7 +162,7 @@ impl Sub for Value {
                 Ok(Value::Number(number1 - number2))
             }
             (Value::Number(number1), Value::String(string2)) => {
-                let number2 = i32::from_str(string2.as_str());
+                let number2 = f64::from_str(string2.as_str());
 
                 if let Result::Ok(number2_value) = number2 {
                     Ok(Value::Number(number1 - number2_value))
@@ -174,7 +174,7 @@ impl Sub for Value {
                 }
             }
             (Value::String(string1), Value::Number(number2)) => {
-                let number1 = i32::from_str(string1.as_str());
+                let number1 = f64::from_str(string1.as_str());
 
                 if let Result::Ok(number1_value) = number1 {
                     Ok(Value::Number(number1_value - number2))
@@ -203,7 +203,7 @@ impl Value {
             }
             (&Value::Bool(bool1), &Value::Bool(bool2)) => Ok(bool1 == bool2),
             (&Value::Number(number1), &Value::String(ref string2)) => {
-                let number2 = i32::from_str(string2.as_str());
+                let number2 = f64::from_str(string2.as_str());
 
                 if let Result::Ok(number2_value) = number2 {
                     Ok(number1 == number2_value)
@@ -215,7 +215,7 @@ impl Value {
                 }
             }
             (&Value::String(ref string1), &Value::Number(number2)) => {
-                let number1 = i32::from_str(string1.as_str());
+                let number1 = f64::from_str(string1.as_str());
 
                 if let Result::Ok(number1_value) = number1 {
                     Ok(number1_value == number2)
@@ -245,7 +245,7 @@ impl Value {
             }
             (&Value::Bool(bool1), &Value::Bool(bool2)) => Ok(bool1 == bool2),
             (&Value::Number(number1), &Value::String(ref string2)) => {
-                let number2 = i32::from_str(string2.as_str());
+                let number2 = f64::from_str(string2.as_str());
 
                 if let Result::Ok(number2_value) = number2 {
                     Ok(number1 < number2_value)
@@ -257,7 +257,7 @@ impl Value {
                 }
             }
             (&Value::String(ref string1), &Value::Number(number2)) => {
-                let number1 = i32::from_str(string1.as_str());
+                let number1 = f64::from_str(string1.as_str());
 
                 if let Result::Ok(number1_value) = number1 {
                     Ok(number1_value < number2)
@@ -283,7 +283,7 @@ impl Value {
             }
             (&Value::Bool(bool1), &Value::Bool(bool2)) => Ok(bool1 && !bool2),
             (&Value::Number(number1), &Value::String(ref string2)) => {
-                let number2 = i32::from_str(string2.as_str());
+                let number2 = f64::from_str(string2.as_str());
 
                 if let Result::Ok(number2_value) = number2 {
                     Ok(number1 > number2_value)
@@ -295,7 +295,7 @@ impl Value {
                 }
             }
             (&Value::String(ref string1), &Value::Number(number2)) => {
-                let number1 = i32::from_str(string1.as_str());
+                let number1 = f64::from_str(string1.as_str());
 
                 if let Result::Ok(number1_value) = number1 { 
                     Ok(number1_value > number2)

@@ -87,13 +87,13 @@ pub fn tokenize_line(line: &str) -> Result<LineOfCode, String> {
                     token_chars.insert(0, ch);
                     let token_str: String = token_chars.into_iter().collect();
 
-                    if i32::from_str(token_str.as_str()).is_ok() {
+                    if f64::from_str(token_str.as_str()).is_ok() {
                         tokens.push(TokenAndPos(
                             pos,
-                            token::Token::Number(i32::from_str(token_str.as_str()).unwrap()),
+                            token::Token::Number(f64::from_str(token_str.as_str()).unwrap()),
                         ));
                     } else {
-                        let token = token::Token::token_for_string(token_str.as_str());
+                        let token = token::Token::token_for_string(token_str.to_uppercase().as_str());
 
                         match token {
                             None => {

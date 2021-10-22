@@ -2,12 +2,10 @@
 pub enum Token {
     Comment(String),
 
-    // Variables and Literals
     Variable(String),
-    Number(i32),
+    Number(f64),
     BString(String),
 
-    // Binary Operators
     Equals,
     LessThan,
     GreaterThan,
@@ -19,27 +17,27 @@ pub enum Token {
     Minus,
     Plus,
 
-    // Parens
     LParen,
     RParen,
 
-    // Unary Operators
     Bang,
     UMinus,
 
-    // Keywords
     Goto,
+    For,
     If,
     Input,
     Let,
+    Next,
     Print,
     Rem,
+    Step,
     Then,
+    To
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Associativity
-{
+pub enum Associativity {
     Left,
     Right,
 }
@@ -65,9 +63,12 @@ impl Token {
             "IF" => Some(Token::If),
             "INPUT" => Some(Token::Input),
             "LET" => Some(Token::Let),
+            "NEXT" => Some(Token::Next),
             "PRINT" => Some(Token::Print),
             "REM" => Some(Token::Rem),
+            "STEP" => Some(Token::Step),
             "THEN" => Some(Token::Then),
+            "TO" => Some(Token::To),
             _ => None,
         }
     }

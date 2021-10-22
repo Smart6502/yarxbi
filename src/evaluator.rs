@@ -206,6 +206,19 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, String> {
                     }
                 }
 
+                /*
+                token::Token::For => {
+                    match (
+                        token_iter.next(),
+                        token_iter.next(),
+                        parse_and_eval_expression(&mut token_iter, &context),
+                        token_iter.next(),
+                        parse_and_eval_expression(&mut token_iter, &context),
+                        token_iter.next(),
+                        parse_and_eval_expression(&mut token_iter, &context),
+                    )
+                }*/
+
                 _ => {
                     return Err(format!("At {:?}, {} invalid syntax", line_number, pos));
                 }
