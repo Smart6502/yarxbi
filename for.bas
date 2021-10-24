@@ -1,0 +1,3 @@
+10 FOR I = 1 TO 30 STEP 1
+20 PRINT "bruh"
+30 NEXT I

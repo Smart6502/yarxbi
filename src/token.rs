@@ -33,7 +33,7 @@ pub enum Token {
     Rem,
     Step,
     Then,
-    To
+    To,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -60,6 +60,7 @@ impl Token {
             ")" => Some(Token::RParen),
             "!" => Some(Token::Bang),
             "GOTO" => Some(Token::Goto),
+            "FOR" => Some(Token::For),
             "IF" => Some(Token::If),
             "INPUT" => Some(Token::Input),
             "LET" => Some(Token::Let),

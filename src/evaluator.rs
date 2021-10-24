@@ -1,23 +1,31 @@
-use crate::lexer;
-use crate::token;
-use crate::value;
+use crate::{lexer, token, value};
 
-use std::collections::BTreeMap;
-use std::collections::HashMap;
-use std::collections::VecDeque;
-use std::io;
-use std::iter::Peekable;
-use std::slice::Iter;
+use std::{
+    collections::{BTreeMap, HashMap, VecDeque},
+    io,
+    iter::Peekable,
+    slice::Iter,
+};
+
+#[derive(Debug)]
+struct ForLoop {
+    line_no: lexer::LineNumber,
+    end: f64,
+    step: f64,
+    slide: bool
+}
 
 #[derive(Debug)]
 struct Context {
     variables: HashMap<String, value::Value>,
+    floops: HashMap<String, ForLoop>
 }
 
 impl Context {
     fn new() -> Context {
         Context {
             variables: HashMap::new(),
+            floops: HashMap::new(),
         }
     }
 }
@@ -182,20 +190,20 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, String> {
                             Some(&lexer::TokenAndPos(_, token::Token::Then)),
                             Some(&lexer::TokenAndPos(_, token::Token::Number(ref number))),
                         ) => {
-                            if *value {
-                                line_has_goto = true;
-                                let n = lexer::LineNumber(*number as u32);
-                                match line_map.get(&n) {
-                                    Some(index) => line_index = *index,
-                                    _ => {
-                                        return Err(format!(
-                                            "At {:?}, {} invalid target line for \
-                                                            IF",
-                                            line_number, pos
-                                        ))
+                                if *value {
+                                    line_has_goto = true;
+                                    let n = lexer::LineNumber(*number as u32);
+                                    match line_map.get(&n) {
+                                        Some(index) => line_index = *index,
+                                        _ => {
+                                            return Err(format!(
+                                                "At {:?}, {} invalid target line for \
+                                                                IF",
+                                                line_number, pos
+                                            ))
+                                        }
                                     }
                                 }
-                            }
                         }
                         _ => {
                             return Err(format!(
@@ -206,7 +214,6 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, String> {
                     }
                 }
 
-                /*
                 token::Token::For => {
                     match (
                         token_iter.next(),
@@ -216,11 +223,88 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, String> {
                         parse_and_eval_expression(&mut token_iter, &context),
                         token_iter.next(),
                         parse_and_eval_expression(&mut token_iter, &context),
-                    )
-                }*/
+                    ) {
+                        (
+                            Some(&lexer::TokenAndPos(_, token::Token::Variable(ref variable))),
+                            Some(&lexer::TokenAndPos(_, token::Token::Equals)),
+                            Ok(value::Value::Number(ref start)),
+                            Some(&lexer::TokenAndPos(_, token::Token::To)),
+                            Ok(value::Value::Number(ref end)),
+                            Some(&lexer::TokenAndPos(_, token::Token::Step)),
+                            Ok(value::Value::Number(ref step))
+                        ) => {
+                            context.variables.insert(variable.clone(), value::Value::Number(*start));
+
+                            context.floops.insert(variable.clone(), ForLoop {
+                                line_no: *line_number.clone(),
+                                end: end.clone(),
+                                step: step.clone(),
+                                slide: *start <= *end
+                            });
+                        }
+
+                        _ => {
+                            return Err(format!(
+                                "At {:?}, {} invalid syntax for FOR.",
+                                line_number, pos
+                            ));
+                        }
+                    }
+                }
+
+                token::Token::Next => {
+                    match token_iter.next() {
+                        Some(&lexer::TokenAndPos(_, token::Token::Variable(ref variable))) => {
+                            let mut floop = match context.floops.get(variable) {
+                                Some(sym) => sym,
+
+                                None => return Err(format!(
+                                    "At {:?}, {} FOR loop out of context.",
+                                    line_number, pos
+                                )),
+                            };
+
+                            let raw = match context.variables.get(variable) {
+                                Some(v) => v,
+                                None => return Err(format!(
+                                    "Invalid variable ({}) expression at {:?}, {}",
+                                    variable, line_number, pos
+                                )),
+                            }.clone();
+
+                            let var = match raw {
+                                value::Value::Number(num) => num,
+                                _ => return Err(format!(
+                                        "Type of variable ({}) called by NEXT is not a Number at {:?}, {}",
+                                        variable, line_number, pos
+                                    )),
+                            };
+
+                            if floop.slide {
+                                let next = var + floop.step;
+
+                                if next <= floop.end {
+                                    context.variables.insert(variable.to_string(), value::Value::Number(next));
+                                }
+                                else {
+                                    context.floops.remove(variable);
+                                }
+                            }
+                        }
+                        _ => {
+                            return Err(format!(
+                                "At {:?}, {} invalid syntax for NEXT.",
+                                line_number, pos
+                            ));
+                        }
+                    }
+                }
 
                 _ => {
-                    return Err(format!("At {:?}, {} invalid syntax", line_number, pos));
+                    return Err(format!(
+                        "At {:?}, {} invalid syntax",
+                        line_number, pos
+                    ));
                 }
             }
         }
@@ -247,7 +331,10 @@ fn parse_expression(
 
     loop {
         match token_iter.peek() {
-            Some(&&lexer::TokenAndPos(_, token::Token::Then)) | None => break,
+            Some(&&lexer::TokenAndPos(_, token::Token::Then)) |
+            Some(&&lexer::TokenAndPos(_, token::Token::To)) |
+            Some(&&lexer::TokenAndPos(_, token::Token::Step)) |
+            None => break,
             _ => {}
         }
 

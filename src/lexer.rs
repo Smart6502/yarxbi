@@ -4,7 +4,7 @@ use itertools::Itertools;
 
 use std::str::FromStr;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LineNumber(pub u32);
 
 #[derive(Debug, Clone, PartialEq)]
