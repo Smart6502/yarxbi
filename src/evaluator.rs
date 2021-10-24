@@ -285,6 +285,14 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, String> {
 
                                 if next <= floop.end {
                                     context.variables.insert(variable.to_string(), value::Value::Number(next));
+
+                                    match line_map.get(&floop.line_no) {
+                                        Some(index) => line_index = *index,
+                                        None => return Err(format!(
+                                                "At {:?}, {}, NEXT could not jump to FOR base",
+                                                line_number, pos    
+                                        )),
+                                    }
                                 }
                                 else {
                                     context.floops.remove(variable);
