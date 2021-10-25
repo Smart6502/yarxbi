@@ -212,7 +212,7 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                     match token_iter.next() {
                         Some(&lexer::TokenAndPos(_, token::Token::Variable(ref variable))) => {
                             let floop = match context.floops.get(variable) {
-                                Some(sym) => sym,
+                                Some(f) => f,
                                 None => err!(line_number, pos, "FOR loop is out of context"),
                             };
 
@@ -229,27 +229,11 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                             let next = var + floop.step;
                             let loop_br = if floop.slide { next < floop.end } else { next > floop.end };
 
-<<<<<<< HEAD
                             if loop_br {
                                 context.variables.insert(variable.to_string(), value::Value::Number(next));
                                 match line_map.get(&floop.line_no) {
                                     Some(index) => line_index = *index,
                                     None => err!(line_number, pos, "Could not get line map"),
-=======
-                                if next <= floop.end {
-                                    context.variables.insert(variable.to_string(), value::Value::Number(next));
-
-                                    match line_map.get(&floop.line_no) {
-                                        Some(index) => line_index = *index,
-                                        None => return Err(format!(
-                                                "At {:?}, {}, NEXT could not jump to FOR base",
-                                                line_number, pos    
-                                        )),
-                                    }
-                                }
-                                else {
-                                    context.floops.remove(variable);
->>>>>>> f99f826de431b11f3a2169f8a00a4200ed7b72ab
                                 }
                             }
                             else {
@@ -432,8 +416,6 @@ fn parse_and_eval_expression<'a>(
                     _ => unreachable!(),
                 }
             }
-
-            println!("{:?}", stack);
 
             // If expression is well formed, there will only be the result on the stack
             assert!(stack.len() == 1);
