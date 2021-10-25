@@ -30,7 +30,13 @@ impl Context {
     }
 }
 
-pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, String> {
+macro_rules! err {
+    ($line:ident, $pos:expr, $fmt:expr $(, $p:expr ) *) => {
+        return Err((**$line, $pos, format!($fmt, $($p),*)))
+    }
+}
+
+pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::LineNumber, u32, String)> {
     let mut context = Context::new();
     let mut lineno_to_code = BTreeMap::new();
     let mut line_map = BTreeMap::new();
@@ -69,30 +75,13 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, String> {
                             let n = lexer::LineNumber(number as u32);
                             match line_map.get(&n) {
                                 Some(index) => line_index = *index,
-                                _ => {
-                                    return Err(format!(
-                                        "At {:?}, {} invalid target line for GOTO",
-                                        line_number, pos
-                                    ))
-                                }
+                                _ => err!(line_number, pos, "Invalid target line for GOTO")
                             }
                         }
-                        Some(&lexer::TokenAndPos(pos, _)) => {
-                            return Err(format!(
-                                "At {:?}, {} GOTO must be followed by valid line \
-                                                number",
-                                line_number, pos
-                            ));
-                        }
-                        None => {
-                            return Err(format!(
-                                "At {:?}, {} GOTO must be followed by a line \
-                                                number",
-                                line_number,
-                                // Adding 4 to give the position past GOTO
-                                pos + 4
-                            ));
-                        }
+                        
+                        Some(&lexer::TokenAndPos(pos, _)) => err!(line_number, pos, "GOTO must be followed by a valid line number"),
+                        
+                        None => err!(line_number, pos + 4, "GOTO must be followed by a line number"),
                     }
                 }
 
@@ -109,22 +98,18 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, String> {
                             Some(&lexer::TokenAndPos(_, token::Token::Equals)),
                             Ok(ref value),
                         ) => {
-                            context
+                            match context
                                 .variables
-                                .insert(variable.clone().to_string(), value.clone());
+                                .insert(variable.clone().to_string(), value.clone()) {
+                                
+                                _ => {},
+                            }
                         }
-                        (_, _, Err(e)) => {
-                            return Err(format!(
-                                "At {:?}, {} error in LET expression: {}",
-                                line_number, pos, e
-                            ))
-                        }
-                        _ => {
-                            return Err(format!(
-                                "At {:?}, {} invalid syntax for LET.",
-                                line_number, pos
-                            ));
-                        }
+
+                        (_, _, Err(e)) => err!(line_number, pos, "Error in LET expression: {}", e),
+
+                        _ => err!(line_number, pos, "Invalid syntax for LET"),
+                        
                     }
                 }
 
@@ -132,16 +117,10 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, String> {
                     // Expected Next:
                     // EXPRESSION
                     match parse_and_eval_expression(&mut token_iter, &context) {
-                        Ok(value::Value::String(value)) => println!("{}", value),
-                        Ok(value::Value::Number(value)) => println!("{}", value),
-                        Ok(value::Value::Bool(value)) => println!("{}", value),
-                        Err(_) => {
-                            return Err(format!(
-                                "At {:?}. {} PRINT must be followed by valid \
-                                                expression",
-                                line_number, pos
-                            ))
-                        }
+                        Ok(value::Value::String(value)) => print!("{}", value),
+                        Ok(value::Value::Number(value)) => print!("{}", value),
+                        Ok(value::Value::Bool(value)) => print!("{}", value),
+                        Err(_) => err!(line_number, pos, "PRINT must be followed by valid expression"),
                     }
                 }
 
@@ -164,15 +143,7 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, String> {
                                 .or_insert(value);
                         }
 
-                        _ => {
-                            return Err(format!(
-                                "At {:?}, {} INPUT must be followed by a \
-                                                variable name",
-                                line_number,
-                                // Adding 5 to put position past INPUT
-                                pos + 5
-                            ));
-                        }
+                        _ => err!(line_number, pos + 5, "INPUT must be followed by a variable name"),
                     }
                 }
 
@@ -195,22 +166,12 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, String> {
                                     let n = lexer::LineNumber(*number as u32);
                                     match line_map.get(&n) {
                                         Some(index) => line_index = *index,
-                                        _ => {
-                                            return Err(format!(
-                                                "At {:?}, {} invalid target line for \
-                                                                IF",
-                                                line_number, pos
-                                            ))
+                                        _ => err!(line_number, pos, "Invalid target line for IF"),
                                         }
                                     }
-                                }
-                        }
-                        _ => {
-                            return Err(format!(
-                                "At {:?}, {}, invalid syntax for IF.",
-                                line_number, pos
-                            ));
-                        }
+                            }
+                        
+                        _ => err!(line_number, pos, "Invalid syntax for IF"),
                     }
                 }
 
@@ -243,46 +204,38 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, String> {
                             });
                         }
 
-                        _ => {
-                            return Err(format!(
-                                "At {:?}, {} invalid syntax for FOR.",
-                                line_number, pos
-                            ));
-                        }
+                        _ => err!(line_number, pos, "Invalid syntax for FOR"),
                     }
                 }
 
                 token::Token::Next => {
                     match token_iter.next() {
                         Some(&lexer::TokenAndPos(_, token::Token::Variable(ref variable))) => {
-                            let mut floop = match context.floops.get(variable) {
+                            let floop = match context.floops.get(variable) {
                                 Some(sym) => sym,
-
-                                None => return Err(format!(
-                                    "At {:?}, {} FOR loop out of context.",
-                                    line_number, pos
-                                )),
+                                None => err!(line_number, pos, "FOR loop is out of context"),
                             };
 
                             let raw = match context.variables.get(variable) {
                                 Some(v) => v,
-                                None => return Err(format!(
-                                    "Invalid variable ({}) expression at {:?}, {}",
-                                    variable, line_number, pos
-                                )),
+                                None => err!(line_number, pos, "Invalid variable expression {}", variable), 
                             }.clone();
 
                             let var = match raw {
                                 value::Value::Number(num) => num,
-                                _ => return Err(format!(
-                                        "Type of variable ({}) called by NEXT is not a Number at {:?}, {}",
-                                        variable, line_number, pos
-                                    )),
+                                _ => err!(line_number, pos, "Variable {} called by NEXT is not a number", variable),
                             };
 
-                            if floop.slide {
-                                let next = var + floop.step;
+                            let next = var + floop.step;
+                            let loop_br = if floop.slide { next < floop.end } else { next > floop.end };
 
+<<<<<<< HEAD
+                            if loop_br {
+                                context.variables.insert(variable.to_string(), value::Value::Number(next));
+                                match line_map.get(&floop.line_no) {
+                                    Some(index) => line_index = *index,
+                                    None => err!(line_number, pos, "Could not get line map"),
+=======
                                 if next <= floop.end {
                                     context.variables.insert(variable.to_string(), value::Value::Number(next));
 
@@ -296,29 +249,20 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, String> {
                                 }
                                 else {
                                     context.floops.remove(variable);
+>>>>>>> f99f826de431b11f3a2169f8a00a4200ed7b72ab
                                 }
                             }
+                            else {
+                                context.floops.remove(variable);
+                            }
                         }
-                        _ => {
-                            return Err(format!(
-                                "At {:?}, {} invalid syntax for NEXT.",
-                                line_number, pos
-                            ));
-                        }
+                        _ => err!(line_number, pos, "Invalid syntax for NEXT"),
                     }
                 }
-
-                _ => {
-                    return Err(format!(
-                        "At {:?}, {} invalid syntax",
-                        line_number, pos
-                    ));
-                }
+            
+            _ => err!(line_number, pos, "Invalid syntax"),
             }
         }
-
-        // At end of execution, show context:
-        // println!("Current context: {:?}", context);
 
         if !line_has_goto {
             line_index += 1;
@@ -328,7 +272,7 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, String> {
         }
     }
 
-    Ok("Completed Successfully".to_string())
+    Ok("\nCompleted Successfully".to_string())
 }
 
 fn parse_expression(
@@ -488,6 +432,8 @@ fn parse_and_eval_expression<'a>(
                     _ => unreachable!(),
                 }
             }
+
+            println!("{:?}", stack);
 
             // If expression is well formed, there will only be the result on the stack
             assert!(stack.len() == 1);

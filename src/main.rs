@@ -36,7 +36,7 @@ fn main() {
 
                 match evaluator::evaluate(code_lines) {
                     Ok(msg) => println!("{}", msg),
-                    Err(msg) => println!("Execution failed: {}", msg),
+                    Err(err) => println!("Execution failed at {:?}:{} because: {}", err.0, err.1, err.2),
                 }
 
             }
