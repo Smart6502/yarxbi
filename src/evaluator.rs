@@ -266,6 +266,8 @@ fn parse_expression(
     let mut operator_stack: Vec<token::Token> = Vec::new();
 
     loop {
+        //println!("iter: {:?}, queue: {:?}, stack: {:?}", token_iter, output_queue, operator_stack);
+
         match token_iter.peek() {
             Some(&&lexer::TokenAndPos(_, token::Token::Then)) |
             Some(&&lexer::TokenAndPos(_, token::Token::To)) |
@@ -331,7 +333,7 @@ fn parse_and_eval_expression<'a>(
         Ok(mut output_queue) => {
             let mut stack: Vec<value::Value> = Vec::new();
 
-            // println!("Evaluating queue: {:?}", output_queue);
+            //println!("Evaluating queue: {:?}", output_queue);
 
             while !output_queue.is_empty() {
                 match output_queue.pop_front() {
@@ -417,8 +419,12 @@ fn parse_and_eval_expression<'a>(
                 }
             }
 
+            //println!("Stack: {:?}", stack);
+
             // If expression is well formed, there will only be the result on the stack
-            assert!(stack.len() == 1);
+            if stack.len() != 1 {
+                return Err("Could not parse expression".to_string());
+            }
             // println!("Final expression result: {:?}", stack[0]);
             Ok(stack[0].clone())
         }

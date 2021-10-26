@@ -1,6 +1,7 @@
 use std::io::Read;
 use std::fs::File;
 use std::env;
+use std::process::exit;
 
 use yarxbi::lexer;
 use yarxbi::evaluator;
@@ -30,7 +31,10 @@ fn main() {
                             // println!("Tokens: {:?}", x.tokens);
                             code_lines.push(x)
                         }
-                        Err(e) => println!("Error at line {}: {}", lineno, e),
+                        Err(e) => {
+                            println!("Error at line {}: {}", lineno, e);
+                            exit(1);
+                        }
                     }
                 }
 
