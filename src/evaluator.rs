@@ -10,8 +10,7 @@ use std::{
 #[derive(Debug)]
 struct ForLoop {
     line_no: lexer::LineNumber,
-    end: f64,
-    step: f64,
+    pos: u32,
     slide: bool
 }
 
@@ -33,6 +32,15 @@ impl Context {
 macro_rules! err {
     ($line:ident, $pos:expr, $fmt:expr $(, $p:expr ) *) => {
         return Err((**$line, $pos, format!($fmt, $($p),*)))
+    }
+}
+
+macro_rules! get_variable {
+    ($ctx:ident, $var:expr, $line:ident, $pos:expr) => {
+        match $ctx.variables.get($var) {
+            Some(value) => value,
+            None => err!($line, $pos, "Invalid variable expression {}", $var),
+        }
     }
 }
 
@@ -117,9 +125,9 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                     // Expected Next:
                     // EXPRESSION
                     match parse_and_eval_expression(&mut token_iter, &context) {
-                        Ok(value::Value::String(value)) => print!("{}", value),
-                        Ok(value::Value::Number(value)) => print!("{}", value),
-                        Ok(value::Value::Bool(value)) => print!("{}", value),
+                        Ok(value::Value::String(value)) => println!("{}", value),
+                        Ok(value::Value::Number(value)) => println!("{}", value),
+                        Ok(value::Value::Bool(value)) => println!("{}", value),
                         Err(_) => err!(line_number, pos, "PRINT must be followed by valid expression"),
                     }
                 }
@@ -176,12 +184,10 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                 }
 
                 token::Token::For => {
+                    // Expected Next:
+                    // Variable equals EXPRESSION to Number step Number
                     match (
                         token_iter.next(),
-                        token_iter.next(),
-                        parse_and_eval_expression(&mut token_iter, &context),
-                        token_iter.next(),
-                        parse_and_eval_expression(&mut token_iter, &context),
                         token_iter.next(),
                         parse_and_eval_expression(&mut token_iter, &context),
                     ) {
@@ -189,57 +195,100 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                             Some(&lexer::TokenAndPos(_, token::Token::Variable(ref variable))),
                             Some(&lexer::TokenAndPos(_, token::Token::Equals)),
                             Ok(value::Value::Number(ref start)),
-                            Some(&lexer::TokenAndPos(_, token::Token::To)),
-                            Ok(value::Value::Number(ref end)),
-                            Some(&lexer::TokenAndPos(_, token::Token::Step)),
-                            Ok(value::Value::Number(ref step))
                         ) => {
-                            context.variables.insert(variable.clone(), value::Value::Number(*start));
+                            context
+                                .variables
+                                .insert(variable.clone(), value::Value::Number(*start));
 
-                            context.floops.insert(variable.clone(), ForLoop {
-                                line_no: *line_number.clone(),
-                                end: end.clone(),
-                                step: step.clone(),
-                                slide: *start <= *end
-                            });
+                            match (
+                                token_iter.next(),
+                                parse_and_eval_expression(&mut token_iter, &context),
+                                token_iter.next(),
+                                parse_and_eval_expression(&mut token_iter, &context),
+                            ) {
+                                (
+                                    Some(&lexer::TokenAndPos(epos, token::Token::To)),
+                                    Ok(value::Value::Number(ref end)),
+                                    Some(&lexer::TokenAndPos(_, token::Token::Step)),
+                                    Ok(value::Value::Number(ref _step)),
+                                ) => {        
+                                    context
+                                        .floops
+                                        .insert(variable.clone(), ForLoop {
+                                            line_no: **line_number,
+                                            pos: epos,
+                                            slide: *start < *end});
+                                },
+        
+                                _ => err!(line_number, pos, "Could not parse secondary FOR expression"),
+                            }
                         }
 
-                        _ => err!(line_number, pos, "Invalid syntax for FOR"),
+                        _ => err!(line_number, pos, "Could not parse FOR initialisation expression"),
                     }
                 }
 
                 token::Token::Next => {
                     match token_iter.next() {
                         Some(&lexer::TokenAndPos(_, token::Token::Variable(ref variable))) => {
-                            let floop = match context.floops.get(variable) {
-                                Some(f) => f,
-                                None => err!(line_number, pos, "FOR loop is out of context"),
+                            let floop = match context
+                                .floops
+                                .get(variable) {
+                                    Some(floop) => floop,
+                                    None => err!(line_number, pos, "Could not get FOR signature from hashmap"),
+                            };
+                            
+                            let var = match get_variable!(context, variable, line_number, pos) {
+                                value::Value::Number(value) => value,
+                                _ => err!(line_number, pos, "Could not parse variable for jump"),
+                            };
+                            
+                            let mut ftok_iter = &mut lineno_to_code[&floop.line_no]
+                                .iter()
+                                .peekable();
+
+                            loop {
+                                ftok_iter.next();
+
+                                let &&lexer::TokenAndPos(pos, _) = ftok_iter
+                                    .peek()
+                                    .unwrap();
+
+                                if pos == floop.pos { break };
+                            }
+
+                            ftok_iter.next();
+                            let end = match parse_and_eval_expression(&mut ftok_iter, &context) {
+                                Ok(value::Value::Number(value)) => value,
+                                _ => err!(line_number, pos, "Could not parse end for FOR"),
+                            };
+                        
+                            ftok_iter.next();
+                            let step = match parse_and_eval_expression(&mut ftok_iter, &context) {
+                                Ok(value::Value::Number(value)) => value,
+                                _ => err!(line_number, pos, "Could not parse step for FOR"),
                             };
 
-                            let raw = match context.variables.get(variable) {
-                                Some(v) => v,
-                                None => err!(line_number, pos, "Invalid variable expression {}", variable), 
-                            }.clone();
-
-                            let var = match raw {
-                                value::Value::Number(num) => num,
-                                _ => err!(line_number, pos, "Variable {} called by NEXT is not a number", variable),
-                            };
-
-                            let next = var + floop.step;
-                            let loop_br = if floop.slide { next < floop.end } else { next > floop.end };
+                            let next = *var + step;
+                            let loop_br = if floop.slide { next < end } else { next > end };
 
                             if loop_br {
-                                context.variables.insert(variable.to_string(), value::Value::Number(next));
+                                context
+                                    .variables
+                                    .insert(variable.to_string(), value::Value::Number(next));
+                                
                                 match line_map.get(&floop.line_no) {
                                     Some(index) => line_index = *index,
-                                    None => err!(line_number, pos, "Could not get line map"),
+                                    None => err!(line_number, pos, "NEXT could not jump to the next iteration"),
                                 }
                             }
                             else {
                                 context.floops.remove(variable);
                             }
                         }
+
+                        None => err!(line_number, pos, "No jumping iterator passed"),
+
                         _ => err!(line_number, pos, "Invalid syntax for NEXT"),
                     }
                 }
@@ -333,8 +382,6 @@ fn parse_and_eval_expression<'a>(
         Ok(mut output_queue) => {
             let mut stack: Vec<value::Value> = Vec::new();
 
-            //println!("Evaluating queue: {:?}", output_queue);
-
             while !output_queue.is_empty() {
                 match output_queue.pop_front() {
                     Some(token::Token::Number(ref number)) => {
@@ -419,13 +466,11 @@ fn parse_and_eval_expression<'a>(
                 }
             }
 
-            //println!("Stack: {:?}", stack);
-
             // If expression is well formed, there will only be the result on the stack
             if stack.len() != 1 {
                 return Err("Could not parse expression".to_string());
             }
-            // println!("Final expression result: {:?}", stack[0]);
+            
             Ok(stack[0].clone())
         }
 
