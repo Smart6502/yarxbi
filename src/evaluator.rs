@@ -220,11 +220,11 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                                             slide: *start < *end});
                                 },
         
-                                _ => err!(line_number, pos, "Could not parse secondary FOR expression"),
+                                _ => err!(line_number, pos, "Cannot parse secondary FOR expression"),
                             }
                         }
 
-                        _ => err!(line_number, pos, "Could not parse FOR initialisation expression"),
+                        _ => err!(line_number, pos, "Cannot parse FOR initialisation expression"),
                     }
                 }
 
@@ -235,12 +235,12 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                                 .floops
                                 .get(variable) {
                                     Some(floop) => floop,
-                                    None => err!(line_number, pos, "Could not get FOR signature from hashmap"),
+                                    None => err!(line_number, pos, "Cannot get FOR signature from hashmap"),
                             };
                             
                             let var = match get_variable!(context, variable, line_number, pos) {
                                 value::Value::Number(value) => value,
-                                _ => err!(line_number, pos, "Could not parse variable for jump"),
+                                _ => err!(line_number, pos, "Cannot parse variable for jump"),
                             };
                             
                             let mut ftok_iter = &mut lineno_to_code[&floop.line_no]
@@ -260,13 +260,13 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                             ftok_iter.next();
                             let end = match parse_and_eval_expression(&mut ftok_iter, &context) {
                                 Ok(value::Value::Number(value)) => value,
-                                _ => err!(line_number, pos, "Could not parse end for FOR"),
+                                _ => err!(line_number, pos, "Cannot parse end for FOR"),
                             };
                         
                             ftok_iter.next();
                             let step = match parse_and_eval_expression(&mut ftok_iter, &context) {
                                 Ok(value::Value::Number(value)) => value,
-                                _ => err!(line_number, pos, "Could not parse step for FOR"),
+                                _ => err!(line_number, pos, "Cannot parse step for FOR"),
                             };
 
                             let next = *var + step;
@@ -279,7 +279,7 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                                 
                                 match line_map.get(&floop.line_no) {
                                     Some(index) => line_index = *index,
-                                    None => err!(line_number, pos, "NEXT could not jump to the next iteration"),
+                                    None => err!(line_number, pos, "Invalid target line for NEXT"),
                                 }
                             }
                             else {
@@ -468,7 +468,7 @@ fn parse_and_eval_expression<'a>(
 
             // If expression is well formed, there will only be the result on the stack
             if stack.len() != 1 {
-                return Err("Could not parse expression".to_string());
+                return Err("Cannot parse expression".to_string());
             }
             
             Ok(stack[0].clone())
