@@ -1,3 +1,3 @@
-10 FOR I = 30 TO 1 STEP -1
-20 PRINT I
-30 NEXT I
+10 for i = 1 to 30
+20 print i
+30 next i

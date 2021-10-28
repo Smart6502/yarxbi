@@ -9,15 +9,16 @@ use std::{
 
 #[derive(Debug)]
 struct ForLoop {
-    line_no: lexer::LineNumber,
-    pos: u32,
-    slide: bool
+    line_no: lexer::LineNumber, // Jump?
+    pos: u32, // Token position of 'to'
+    slide: bool, // Condition symbol (gt/lt)
+    stes: bool // Try custom step?
 }
 
 #[derive(Debug)]
 struct Context {
-    variables: HashMap<String, value::Value>,
-    floops: HashMap<String, ForLoop>
+    variables: HashMap<String, value::Value>, // Variables
+    floops: HashMap<String, ForLoop> // For loops
 }
 
 impl Context {
@@ -108,7 +109,7 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                         ) => {
                             match context
                                 .variables
-                                .insert(variable.clone().to_string(), value.clone()) {
+                                .insert(variable.to_string(), value.clone()) {
                                 
                                 _ => {},
                             }
@@ -147,7 +148,7 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                             // Can overwrite an existing value
                             context
                                 .variables
-                                .entry(variable.clone().to_string())
+                                .entry(variable.to_string())
                                 .or_insert(value);
                         }
 
@@ -198,28 +199,35 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                         ) => {
                             context
                                 .variables
-                                .insert(variable.clone(), value::Value::Number(*start));
+                                .insert(variable.to_string(), value::Value::Number(*start));
 
                             match (
-                                token_iter.next(),
-                                parse_and_eval_expression(&mut token_iter, &context),
                                 token_iter.next(),
                                 parse_and_eval_expression(&mut token_iter, &context),
                             ) {
                                 (
                                     Some(&lexer::TokenAndPos(epos, token::Token::To)),
                                     Ok(value::Value::Number(ref end)),
-                                    Some(&lexer::TokenAndPos(_, token::Token::Step)),
-                                    Ok(value::Value::Number(ref _step)),
-                                ) => {        
+                                ) => {
+                                    let stes = match token_iter.next() {
+                                        Some(&lexer::TokenAndPos(_, token::Token::Step)) => {
+                                            match parse_and_eval_expression(&mut token_iter, &context) {
+                                                Ok(value::Value::Number(ref _step)) => true,
+                                                _ => err!(line_number, pos, "Cannot parse FOR step"),
+                                            }
+                                        },
+                                        _ => false,
+                                    };
+
                                     context
                                         .floops
-                                        .insert(variable.clone(), ForLoop {
+                                        .insert(variable.to_string(), ForLoop {
                                             line_no: **line_number,
                                             pos: epos,
-                                            slide: *start < *end});
+                                            slide: *start < *end,
+                                            stes: stes});
                                 },
-        
+
                                 _ => err!(line_number, pos, "Cannot parse secondary FOR expression"),
                             }
                         }
@@ -263,10 +271,14 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                                 _ => err!(line_number, pos, "Cannot parse end for FOR"),
                             };
                         
-                            ftok_iter.next();
-                            let step = match parse_and_eval_expression(&mut ftok_iter, &context) {
-                                Ok(value::Value::Number(value)) => value,
-                                _ => err!(line_number, pos, "Cannot parse step for FOR"),
+                            let step = if floop.stes {
+                                match parse_and_eval_expression(&mut token_iter, &context) {
+                                    Ok(value::Value::Number(value)) => value,
+                                    _ => err!(line_number, pos, "Cannot parse step for FOR"),
+                                }
+                            }
+                            else {
+                                if floop.slide { 1 as f64 } else { -1 as f64 }
                             };
 
                             let next = *var + step;
