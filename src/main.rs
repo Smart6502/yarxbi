@@ -1,10 +1,6 @@
-use std::io::Read;
-use std::fs::File;
-use std::env;
-use std::process::exit;
+use std::{env, fs::File, io::Read, process::exit, time::Instant};
 
-use yarxbi::lexer;
-use yarxbi::evaluator;
+use yarxbi::{lexer, evaluator};
 
 fn read_file(path: &str) -> Result<String, std::io::Error> {
     let mut f = File::open(path)?;
@@ -16,6 +12,8 @@ fn read_file(path: &str) -> Result<String, std::io::Error> {
 fn main() {
     let mut argv = env::args();
 
+    let dur = Instant::now();
+
     if env::args().len() > 1 {
         let program: String = argv.nth(1).unwrap();
         match read_file(program.as_str()) {
@@ -25,12 +23,7 @@ fn main() {
                 for (lineno, line) in s.lines().enumerate() {
                     let result = lexer::tokenize_line(line);
                     match result {
-                        Ok(x) => {
-                            // println!("{}", line);
-                            // println!("Line Number: {:?}", x.line_number);
-                            // println!("Tokens: {:?}", x.tokens);
-                            code_lines.push(x)
-                        }
+                        Ok(x) => code_lines.push(x),
                         Err(e) => {
                             println!("Error at line {}: {}", lineno, e);
                             exit(1);
@@ -39,7 +32,7 @@ fn main() {
                 }
 
                 match evaluator::evaluate(code_lines) {
-                    Ok(msg) => println!("{}", msg),
+                    Ok(msg) => println!("{} in {:?}", msg, dur.elapsed()),
                     Err(err) => println!("Execution failed at {:?}:{} because: {}", err.0, err.1, err.2),
                 }
 

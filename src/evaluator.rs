@@ -107,12 +107,9 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                             Some(&lexer::TokenAndPos(_, token::Token::Equals)),
                             Ok(ref value),
                         ) => {
-                            match context
+                            context
                                 .variables
-                                .insert(variable.to_string(), value.clone()) {
-                                
-                                _ => {},
-                            }
+                                .insert(variable.to_string(), value.clone());
                         }
 
                         (_, _, Err(e)) => err!(line_number, pos, "Error in LET expression: {}", e),
@@ -246,11 +243,6 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                                     None => err!(line_number, pos, "Cannot get FOR signature from hashmap"),
                             };
                             
-                            let var = match get_variable!(context, variable, line_number, pos) {
-                                value::Value::Number(value) => value,
-                                _ => err!(line_number, pos, "Cannot parse variable for jump"),
-                            };
-                            
                             let mut ftok_iter = &mut lineno_to_code[&floop.line_no]
                                 .iter()
                                 .peekable();
@@ -281,10 +273,12 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                                 if floop.slide { 1 as f64 } else { -1 as f64 }
                             };
 
-                            let next = *var + step;
-                            let loop_br = if floop.slide { next < end } else { next > end };
-
-                            if loop_br {
+                            let next = *match get_variable!(context, variable, line_number, pos) {
+                                value::Value::Number(value) => value,
+                                _ => err!(line_number, pos, "Cannot parse variable for jump"),
+                            } + step;
+                            
+                            if if floop.slide { next < end } else { next > end } {
                                 context
                                     .variables
                                     .insert(variable.to_string(), value::Value::Number(next));
@@ -295,7 +289,9 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                                 }
                             }
                             else {
-                                context.floops.remove(variable);
+                                context
+                                    .floops
+                                    .remove(variable);
                             }
                         }
 

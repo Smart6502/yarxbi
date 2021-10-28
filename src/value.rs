@@ -1,10 +1,7 @@
-use std::ops::Add;
-use std::ops::Div;
-use std::ops::Mul;
-use std::ops::Neg;
-use std::ops::Not;
-use std::ops::Sub;
-use std::str::FromStr;
+use std::{
+    ops::{Add, Div, Mul, Neg, Not, Sub},
+    str::FromStr,
+};
 
 #[derive(Debug, Clone)]
 pub enum Value {
