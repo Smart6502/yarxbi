@@ -72,237 +72,19 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
             // Set default value
             line_has_goto = false;
 
-            match *token {
-                token::Token::Rem => {
-                    // Skip the rest of the line so do nothing
-                }
-
-                token::Token::Goto => {
-                    line_has_goto = true;
-                    match token_iter.next() {
-                        Some(&lexer::TokenAndPos(pos, token::Token::Number(number))) => {
-                            let n = lexer::LineNumber(number as u32);
-                            match line_map.get(&n) {
-                                Some(index) => line_index = *index,
-                                _ => err!(line_number, pos, "Invalid target line for GOTO")
-                            }
-                        }
-                        
-                        Some(&lexer::TokenAndPos(pos, _)) => err!(line_number, pos, "GOTO must be followed by a valid line number"),
-                        
-                        None => err!(line_number, pos + 4, "GOTO must be followed by a line number"),
-                    }
-                }
-
-                token::Token::Let => {
-                    // Expected Next:
-                    // Variable Equals EXPRESSION
-                    match (
-                        token_iter.next(),
-                        token_iter.next(),
-                        parse_and_eval_expression(&mut token_iter, &context),
-                    ) {
-                        (
-                            Some(&lexer::TokenAndPos(_, token::Token::Variable(ref variable))),
-                            Some(&lexer::TokenAndPos(_, token::Token::Equals)),
-                            Ok(ref value),
-                        ) => {
-                            context
-                                .variables
-                                .insert(variable.to_string(), value.clone());
-                        }
-
-                        (_, _, Err(e)) => err!(line_number, pos, "Error in LET expression: {}", e),
-
-                        _ => err!(line_number, pos, "Invalid syntax for LET"),
-                        
-                    }
-                }
-
-                token::Token::Print => {
-                    // Expected Next:
-                    // EXPRESSION
-                    match parse_and_eval_expression(&mut token_iter, &context) {
-                        Ok(value::Value::String(value)) => println!("{}", value),
-                        Ok(value::Value::Number(value)) => println!("{}", value),
-                        Ok(value::Value::Bool(value)) => println!("{}", value),
-                        Err(_) => err!(line_number, pos, "PRINT must be followed by valid expression"),
-                    }
-                }
-
-                token::Token::Input => {
-                    match token_iter.next() {
-                        Some(&lexer::TokenAndPos(_, token::Token::Variable(ref variable))) => {
-                            let mut input = String::new();
-
-                            io::stdin()
-                                .read_line(&mut input)
-                                .expect("failed to read line");
-                            input = input.trim().to_string();
-                            let value = value::Value::String(input);
-
-                            // Store the string now, can coerce to number later if needed
-                            // Can overwrite an existing value
-                            context
-                                .variables
-                                .entry(variable.to_string())
-                                .or_insert(value);
-                        }
-
-                        _ => err!(line_number, pos + 5, "INPUT must be followed by a variable name"),
-                    }
-                }
-
-                token::Token::If => {
-                    // Expected Next:
-                    // EXPRESSION Then Number
-                    // Where Number is a Line Number
-                    match (
-                        parse_and_eval_expression(&mut token_iter, &context),
-                        token_iter.next(),
-                        token_iter.next(),
-                    ) {
-                        (
-                            Ok(value::Value::Bool(ref value)),
-                            Some(&lexer::TokenAndPos(_, token::Token::Then)),
-                            Some(&lexer::TokenAndPos(_, token::Token::Number(ref number))),
-                        ) => {
-                                if *value {
-                                    line_has_goto = true;
-                                    let n = lexer::LineNumber(*number as u32);
-                                    match line_map.get(&n) {
-                                        Some(index) => line_index = *index,
-                                        _ => err!(line_number, pos, "Invalid target line for IF"),
-                                        }
-                                    }
-                            }
-                        
-                        _ => err!(line_number, pos, "Invalid syntax for IF"),
-                    }
-                }
-
-                token::Token::For => {
-                    // Expected Next:
-                    // Variable equals EXPRESSION to Number step Number
-                    match (
-                        token_iter.next(),
-                        token_iter.next(),
-                        parse_and_eval_expression(&mut token_iter, &context),
-                    ) {
-                        (
-                            Some(&lexer::TokenAndPos(_, token::Token::Variable(ref variable))),
-                            Some(&lexer::TokenAndPos(_, token::Token::Equals)),
-                            Ok(value::Value::Number(ref start)),
-                        ) => {
-                            context
-                                .variables
-                                .insert(variable.to_string(), value::Value::Number(*start));
-
-                            match (
-                                token_iter.next(),
-                                parse_and_eval_expression(&mut token_iter, &context),
-                            ) {
-                                (
-                                    Some(&lexer::TokenAndPos(epos, token::Token::To)),
-                                    Ok(value::Value::Number(ref end)),
-                                ) => {
-                                    let stes = match token_iter.next() {
-                                        Some(&lexer::TokenAndPos(_, token::Token::Step)) => {
-                                            match parse_and_eval_expression(&mut token_iter, &context) {
-                                                Ok(value::Value::Number(ref _step)) => true,
-                                                _ => err!(line_number, pos, "Cannot parse FOR step"),
-                                            }
-                                        },
-                                        _ => false,
-                                    };
-
-                                    context
-                                        .floops
-                                        .insert(variable.to_string(), ForLoop {
-                                            line_no: **line_number,
-                                            pos: epos,
-                                            slide: *start < *end,
-                                            stes: stes});
-                                },
-
-                                _ => err!(line_number, pos, "Cannot parse secondary FOR expression"),
-                            }
-                        }
-
-                        _ => err!(line_number, pos, "Cannot parse FOR initialisation expression"),
-                    }
-                }
-
-                token::Token::Next => {
-                    match token_iter.next() {
-                        Some(&lexer::TokenAndPos(_, token::Token::Variable(ref variable))) => {
-                            let floop = match context
-                                .floops
-                                .get(variable) {
-                                    Some(floop) => floop,
-                                    None => err!(line_number, pos, "Cannot get FOR signature from hashmap"),
-                            };
-                            
-                            let mut ftok_iter = &mut lineno_to_code[&floop.line_no]
-                                .iter()
-                                .peekable();
-
-                            loop {
-                                ftok_iter.next();
-
-                                let &&lexer::TokenAndPos(pos, _) = ftok_iter
-                                    .peek()
-                                    .unwrap();
-
-                                if pos == floop.pos { break };
-                            }
-
-                            ftok_iter.next();
-                            let end = match parse_and_eval_expression(&mut ftok_iter, &context) {
-                                Ok(value::Value::Number(value)) => value,
-                                _ => err!(line_number, pos, "Cannot parse end for FOR"),
-                            };
-                        
-                            let step = if floop.stes {
-                                match parse_and_eval_expression(&mut token_iter, &context) {
-                                    Ok(value::Value::Number(value)) => value,
-                                    _ => err!(line_number, pos, "Cannot parse step for FOR"),
-                                }
-                            }
-                            else {
-                                if floop.slide { 1 as f64 } else { -1 as f64 }
-                            };
-
-                            let next = *match get_variable!(context, variable, line_number, pos) {
-                                value::Value::Number(value) => value,
-                                _ => err!(line_number, pos, "Cannot parse variable for jump"),
-                            } + step;
-                            
-                            if if floop.slide { next < end } else { next > end } {
-                                context
-                                    .variables
-                                    .insert(variable.to_string(), value::Value::Number(next));
-                                
-                                match line_map.get(&floop.line_no) {
-                                    Some(index) => line_index = *index,
-                                    None => err!(line_number, pos, "Invalid target line for NEXT"),
-                                }
-                            }
-                            else {
-                                context
-                                    .floops
-                                    .remove(variable);
-                            }
-                        }
-
-                        None => err!(line_number, pos, "No jumping iterator passed"),
-
-                        _ => err!(line_number, pos, "Invalid syntax for NEXT"),
-                    }
-                }
-            
-            _ => err!(line_number, pos, "Invalid syntax"),
-            }
+            match evaluate_com(&mut context,
+                        lineno_to_code.clone(),
+                        line_map.clone(),
+                        &mut line_index,
+                        &mut line_has_goto,
+                        token_iter,
+                        line_number,
+                        pos,
+                        token
+            ) {
+                Ok(_) => {},
+                Err(e) => return Err(e),
+            };
         }
 
         if !line_has_goto {
@@ -313,7 +95,252 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
         }
     }
 
-    Ok("\nCompleted Successfully".to_string())
+    Ok("\nExecuted successfully".to_string())
+}
+
+fn evaluate_com(
+    context: &mut Context,
+    lineno_to_code: BTreeMap<&lexer::LineNumber, &Vec<lexer::TokenAndPos>>,
+    line_map: BTreeMap<&lexer::LineNumber, usize>,
+    line_index: &mut usize,
+    line_has_goto: &mut bool,
+    mut token_iter: Peekable<Iter<'_, lexer::TokenAndPos>>,
+    line_number: &&lexer::LineNumber,
+    pos: u32,
+    token: &token::Token,
+) -> Result<String, (lexer::LineNumber, u32, String)> {
+
+    match *token {
+        token::Token::Rem => {},
+
+        token::Token::Goto => {
+            *line_has_goto = true;
+            match token_iter.next() {
+                Some(&lexer::TokenAndPos(pos, token::Token::Number(number))) => {
+                    let n = lexer::LineNumber(number as u32);
+                    match line_map.get(&n) {
+                        Some(index) => *line_index = *index,
+                        _ => err!(line_number, pos, "Invalid target line for GOTO")
+                    }
+                }
+                
+                Some(&lexer::TokenAndPos(pos, _)) => err!(line_number, pos, "GOTO must be followed by a valid line number"),
+                
+                None => err!(line_number, pos + 4, "GOTO must be followed by a line number"),
+            }
+        }
+
+        token::Token::Let => {
+            // Expected Next:
+            // Variable Equals EXPRESSION
+            match (
+                token_iter.next(),
+                token_iter.next(),
+                parse_and_eval_expression(&mut token_iter, &context),
+            ) {
+                (
+                    Some(&lexer::TokenAndPos(_, token::Token::Variable(ref variable))),
+                    Some(&lexer::TokenAndPos(_, token::Token::Equals)),
+                    Ok(ref value),
+                ) => {
+                    context
+                        .variables
+                        .insert(variable.to_string(), value.clone());
+                }
+
+                (_, _, Err(e)) => err!(line_number, pos, "Error in LET expression: {}", e),
+
+                _ => err!(line_number, pos, "Invalid syntax for LET"),
+                
+            }
+        }
+
+        token::Token::Print => {
+            // Expected Next:
+            // EXPRESSION
+            match parse_and_eval_expression(&mut token_iter, &context) {
+                Ok(value::Value::String(value)) => println!("{}", value),
+                Ok(value::Value::Number(value)) => println!("{}", value),
+                Ok(value::Value::Bool(value)) => println!("{}", value),
+                Err(_) => err!(line_number, pos, "PRINT must be followed by valid expression"),
+            }
+        }
+
+        token::Token::Input => {
+            match token_iter.next() {
+                Some(&lexer::TokenAndPos(_, token::Token::Variable(ref variable))) => {
+                    let mut input = String::new();
+
+                    io::stdin()
+                        .read_line(&mut input)
+                        .expect("failed to read line");
+                    input = input.trim().to_string();
+                    let value = value::Value::String(input);
+
+                    // Store the string now, can coerce to number later if needed
+                    // Can overwrite an existing value
+                    context
+                        .variables
+                        .entry(variable.to_string())
+                        .or_insert(value);
+                }
+
+                _ => err!(line_number, pos + 5, "INPUT must be followed by a variable name"),
+            }
+        }
+
+        token::Token::If => {
+            // Expected Next:
+            // EXPRESSION Then Number
+            // Where Number is a Line Number
+            match (
+                parse_and_eval_expression(&mut token_iter, &context),
+                token_iter.next(),
+                token_iter.next(),
+            ) {
+                (
+                    Ok(value::Value::Bool(ref value)),
+                    Some(&lexer::TokenAndPos(_, token::Token::Then)),
+                    Some(&lexer::TokenAndPos(_, token::Token::Number(ref number))),
+                ) => {
+                        if *value {
+                            *line_has_goto = true;
+                            let n = lexer::LineNumber(*number as u32);
+                            match line_map.get(&n) {
+                                Some(index) => *line_index = *index,
+                                _ => err!(line_number, pos, "Invalid target line for IF"),
+                                }
+                            }
+                    }
+                
+                _ => err!(line_number, pos, "Invalid syntax for IF"),
+            }
+        }
+
+        token::Token::For => {
+            // Expected Next:
+            // Variable equals EXPRESSION to Number step Number
+            match (
+                token_iter.next(),
+                token_iter.next(),
+                parse_and_eval_expression(&mut token_iter, &context),
+            ) {
+                (
+                    Some(&lexer::TokenAndPos(_, token::Token::Variable(ref variable))),
+                    Some(&lexer::TokenAndPos(_, token::Token::Equals)),
+                    Ok(value::Value::Number(ref start)),
+                ) => {
+                    context
+                        .variables
+                        .insert(variable.to_string(), value::Value::Number(*start));
+
+                    match (
+                        token_iter.next(),
+                        parse_and_eval_expression(&mut token_iter, &context),
+                    ) {
+                        (
+                            Some(&lexer::TokenAndPos(epos, token::Token::To)),
+                            Ok(value::Value::Number(ref end)),
+                        ) => {
+                            let stes = match token_iter.next() {
+                                Some(&lexer::TokenAndPos(_, token::Token::Step)) => {
+                                    match parse_and_eval_expression(&mut token_iter, &context) {
+                                        Ok(value::Value::Number(ref _step)) => true,
+                                        _ => err!(line_number, pos, "Cannot parse FOR step"),
+                                    }
+                                },
+                                _ => false,
+                            };
+
+                            context
+                                .floops
+                                .insert(variable.to_string(), ForLoop {
+                                    line_no: **line_number,
+                                    pos: epos,
+                                    slide: *start < *end,
+                                    stes: stes});
+                        },
+
+                        _ => err!(line_number, pos, "Cannot parse secondary FOR expression"),
+                    }
+                }
+
+                _ => err!(line_number, pos, "Cannot parse FOR initialisation expression"),
+            }
+        }
+
+        token::Token::Next => {
+            match token_iter.next() {
+                Some(&lexer::TokenAndPos(_, token::Token::Variable(ref variable))) => {
+                    let floop = match context
+                        .floops
+                        .get(variable) {
+                            Some(floop) => floop,
+                            None => err!(line_number, pos, "Cannot get FOR signature from hashmap"),
+                    };
+                    
+                    let mut ftok_iter = &mut lineno_to_code[&floop.line_no]
+                        .iter()
+                        .peekable();
+
+                    loop {
+                        ftok_iter.next();
+
+                        let &&lexer::TokenAndPos(pos, _) = ftok_iter
+                            .peek()
+                            .unwrap();
+
+                        if pos == floop.pos { break };
+                    }
+
+                    ftok_iter.next();
+                    let end = match parse_and_eval_expression(&mut ftok_iter, &context) {
+                        Ok(value::Value::Number(value)) => value,
+                        _ => err!(line_number, pos, "Cannot parse end for FOR"),
+                    };
+                
+                    let step = if floop.stes {
+                        match parse_and_eval_expression(&mut token_iter, &context) {
+                            Ok(value::Value::Number(value)) => value,
+                            _ => err!(line_number, pos, "Cannot parse step for FOR"),
+                        }
+                    }
+                    else {
+                        if floop.slide { 1 as f64 } else { -1 as f64 }
+                    };
+
+                    let next = *match get_variable!(context, variable, line_number, pos) {
+                        value::Value::Number(value) => value,
+                        _ => err!(line_number, pos, "Cannot parse variable for jump"),
+                    } + step;
+                    
+                    if if floop.slide { next < end } else { next > end } {
+                        context
+                            .variables
+                            .insert(variable.to_string(), value::Value::Number(next));
+                        
+                        match line_map.get(&floop.line_no) {
+                            Some(index) => *line_index = *index,
+                            None => err!(line_number, pos, "Invalid target line for NEXT"),
+                        }
+                    }
+                    else {
+                        context
+                            .floops
+                            .remove(variable);
+                    }
+                }
+
+                None => err!(line_number, pos, "No jumping iterator passed"),
+
+                _ => err!(line_number, pos, "Invalid syntax for NEXT"),
+            }
+        }
+
+        _ => err!(line_number, pos, "Invalid syntax"),
+    }
+    
+    return Ok(String::new());
 }
 
 fn parse_expression(

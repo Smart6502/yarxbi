@@ -12,7 +12,7 @@ fn read_file(path: &str) -> Result<String, std::io::Error> {
 fn main() {
     let mut argv = env::args();
 
-    let dur = Instant::now();
+    let ist = Instant::now();
 
     if env::args().len() > 1 {
         let program: String = argv.nth(1).unwrap();
@@ -32,8 +32,8 @@ fn main() {
                 }
 
                 match evaluator::evaluate(code_lines) {
-                    Ok(msg) => println!("{} in {:?}", msg, dur.elapsed()),
-                    Err(err) => println!("Execution failed at {:?}:{} because: {}", err.0, err.1, err.2),
+                    Ok(msg) => println!("{} in {:?}", msg, ist.elapsed()),
+                    Err(err) => println!("Execution failed at {}:{} because: {}", err.0.0, err.1, err.2),
                 }
 
             }
