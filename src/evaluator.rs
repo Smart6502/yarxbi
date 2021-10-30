@@ -353,7 +353,10 @@ fn evaluate_com(
 
         token::Token::Wend => {
             let wloops = &context.wloops;
-            let wloop = &wloops[wloops.len() - 1];
+            let wloop = match wloops.last() {
+                Some(wl) => wl,
+                None => err!(line_number, pos, "Cannot find last WHILE loop"),
+            };
 
             let mut wtok_iter = &mut lineno_to_code[&wloop.line_no]
                 .iter()
