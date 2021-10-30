@@ -16,9 +16,16 @@ struct ForLoop {
 }
 
 #[derive(Debug)]
+struct WhileLoop {
+    line_no: lexer::LineNumber,
+    pos: u32
+}
+
+#[derive(Debug)]
 struct Context {
     variables: HashMap<String, value::Value>, // Variables
-    floops: HashMap<String, ForLoop> // For loops
+    floops: HashMap<String, ForLoop>, // For loops
+    wloops: Vec<WhileLoop>,
 }
 
 impl Context {
@@ -26,6 +33,7 @@ impl Context {
         Context {
             variables: HashMap::new(),
             floops: HashMap::new(),
+            wloops: Vec::new(),
         }
     }
 }
@@ -73,8 +81,8 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
             line_has_goto = false;
 
             match evaluate_com(&mut context,
-                        lineno_to_code.clone(),
-                        line_map.clone(),
+                        &lineno_to_code,
+                        &line_map,
                         &mut line_index,
                         &mut line_has_goto,
                         token_iter,
@@ -100,8 +108,8 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
 
 fn evaluate_com(
     context: &mut Context,
-    lineno_to_code: BTreeMap<&lexer::LineNumber, &Vec<lexer::TokenAndPos>>,
-    line_map: BTreeMap<&lexer::LineNumber, usize>,
+    lineno_to_code: &BTreeMap<&lexer::LineNumber, &Vec<lexer::TokenAndPos>>,
+    line_map: &BTreeMap<&lexer::LineNumber, usize>,
     line_index: &mut usize,
     line_has_goto: &mut bool,
     mut token_iter: Peekable<Iter<'_, lexer::TokenAndPos>>,
@@ -283,14 +291,8 @@ fn evaluate_com(
                         .iter()
                         .peekable();
 
-                    loop {
+                    while ftok_iter.peek().unwrap().0 != floop.pos {
                         ftok_iter.next();
-
-                        let &&lexer::TokenAndPos(pos, _) = ftok_iter
-                            .peek()
-                            .unwrap();
-
-                        if pos == floop.pos { break };
                     }
 
                     ftok_iter.next();
@@ -337,6 +339,49 @@ fn evaluate_com(
             }
         }
 
+        token::Token::While => {
+            match parse_and_eval_expression(&mut token_iter, &context) {
+                Ok(value::Value::Bool(_)) => context
+                            .wloops
+                            .push(WhileLoop { line_no: **line_number, pos: pos }),
+
+                Err(_) => err!(line_number, pos, "Invalid boolean expression"),
+
+                _ => err!(line_number, pos, "Invalid expression type (expected boolean)"),
+            }
+        }
+
+        token::Token::Wend => {
+            let wloops = &context.wloops;
+            let wloop = &wloops[wloops.len() - 1];
+
+            let mut wtok_iter = &mut lineno_to_code[&wloop.line_no]
+                .iter()
+                .peekable();
+
+            wtok_iter.next();
+
+            match parse_and_eval_expression(&mut wtok_iter, &context) {
+                Ok(value::Value::Bool(truth)) => {
+                    if truth {
+                        match line_map.get(&wloop.line_no) {
+                            Some(index) => *line_index = *index,
+                            None => err!(line_number, pos, "Invalid target line for WHILE"),
+                        }
+                    }
+                    else {
+                        context
+                            .wloops
+                            .pop();
+                    }
+                }
+
+                Err(_) => err!(line_number, pos, "Invalid boolean expression"),
+
+                _ => err!(line_number, pos, "Invalid expression type (expected boolean)"),
+            }
+        }
+
         _ => err!(line_number, pos, "Invalid syntax"),
     }
     
@@ -350,8 +395,6 @@ fn parse_expression(
     let mut operator_stack: Vec<token::Token> = Vec::new();
 
     loop {
-        //println!("iter: {:?}, queue: {:?}, stack: {:?}", token_iter, output_queue, operator_stack);
-
         match token_iter.peek() {
             Some(&&lexer::TokenAndPos(_, token::Token::Then)) |
             Some(&&lexer::TokenAndPos(_, token::Token::To)) |
@@ -359,6 +402,8 @@ fn parse_expression(
             None => break,
             _ => {}
         }
+
+        //println!("iter: {:?}", token_iter);
 
         match token_iter.next() {
             Some(&lexer::TokenAndPos(_, ref value_token)) if value_token.is_value() => {
@@ -393,7 +438,9 @@ fn parse_expression(
                     None => return Err("Mismatched parenthesis in expression".to_string()),
                 }
             },
-            _ => unreachable!(),
+            _ => {
+                unreachable!();
+            },
         }
     }
 

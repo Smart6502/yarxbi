@@ -17,6 +17,7 @@ pub enum Token {
     Minus,
     Plus,
 
+    Semicolon,
     LParen,
     RParen,
 
@@ -34,6 +35,8 @@ pub enum Token {
     Step,
     Then,
     To,
+    Wend,
+    While,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -56,6 +59,7 @@ impl Token {
             // Yes, this is also Token::UMinus
             "-" => Some(Token::Minus),
             "+" => Some(Token::Plus),
+            ";" => Some(Token::Semicolon),
             "(" => Some(Token::LParen),
             ")" => Some(Token::RParen),
             "!" => Some(Token::Bang),
@@ -70,6 +74,8 @@ impl Token {
             "STEP" => Some(Token::Step),
             "THEN" => Some(Token::Then),
             "TO" => Some(Token::To),
+            "WEND" => Some(Token::Wend),
+            "WHILE" => Some(Token::While),
             _ => None,
         }
     }
