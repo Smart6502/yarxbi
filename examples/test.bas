@@ -1,3 +1,5 @@
+#!/usr/bin/env yarxbi
+
 10 let x = 20
 20 let t = 1
 30 if x <= 1 then 70

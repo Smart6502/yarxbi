@@ -23,7 +23,11 @@ fn main() {
                 for (lineno, line) in s.lines().enumerate() {
                     let result = lexer::tokenize_line(line);
                     match result {
-                        Ok(x) => code_lines.push(x),
+                        Ok(x) => {
+                            if x.line_number.0 != u32::MAX - 1 {
+                                code_lines.push(x)
+                            }
+                        },
                         Err(e) => {
                             println!("Error at line {}: {}", lineno, e);
                             exit(1);

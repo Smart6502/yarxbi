@@ -1,3 +1,5 @@
+#!/usr/bin/env yarxbi
+
 10 for i = 0 to 5
 20 let j = 0
 30 while j < 5

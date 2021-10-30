@@ -45,7 +45,14 @@ pub fn tokenize_line(line: &str) -> Result<LineOfCode, String> {
                         ))
                     }
                 };
-            } else {
+            }
+            else if ch == '#' {
+                return Ok(LineOfCode {
+                    line_number: LineNumber(u32::MAX - 1),
+                    tokens,
+                });
+            }
+            else {
                 return Err(format!("Line must start with a line number:\n\t{}", line));
             }
         } else {
