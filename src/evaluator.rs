@@ -473,7 +473,27 @@ fn parse_and_eval_expression<'a>(
                         stack.push(value::Value::Number(*number))
                     }
                     Some(token::Token::BString(ref bstring)) => {
-                        stack.push(value::Value::String(bstring.clone()))
+                        let mut checked = String::new();
+                        let mut is_ep = false;
+
+                        for c in bstring.chars().peekable() {
+                            if c == '\\' {
+                                is_ep = true;                                
+                            } else {
+                                checked.push(if is_ep { match c {
+                                    'e' => '\x1b',
+                                    'n' => '\n',
+                                    '\\' => '\\',
+                                    _ => c,
+                                }} else {
+                                    c
+                                });
+
+                                is_ep = false;
+                            };
+                        }
+
+                        stack.push(value::Value::String(checked));
                     }
                     Some(token::Token::Variable(ref name)) => match context.variables.get(name) {
                         Some(value) => stack.push(value.clone()),

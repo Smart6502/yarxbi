@@ -36,8 +36,8 @@ fn main() {
                 }
 
                 match evaluator::evaluate(code_lines) {
-                    Ok(msg) => println!("{} in {:?}", msg, ist.elapsed()),
-                    Err(err) => println!("Execution failed at {}:{} because: {}", err.0.0, err.1, err.2),
+                    Ok(msg) => println!("\x1b[0m{} in {:?}", msg, ist.elapsed()),
+                    Err(err) => println!("\x1b[0mExecution failed at {}:{} because: {}", err.0.0, err.1, err.2),
                 }
 
             }
