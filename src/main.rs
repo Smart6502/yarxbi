@@ -29,7 +29,7 @@ fn main() {
                             }
                         },
                         Err(e) => {
-                            println!("Error at line {}: {}", lineno, e);
+                            eprintln!("Error at line {}: {}", lineno, e);
                             exit(1);
                         }
                     }
@@ -37,11 +37,14 @@ fn main() {
 
                 match evaluator::evaluate(code_lines) {
                     Ok(msg) => println!("\x1b[0m{} in {:?}", msg, ist.elapsed()),
-                    Err(err) => println!("\x1b[0mExecution failed at {}:{} because: {}", err.0.0, err.1, err.2),
+                    Err(err) => {
+                        eprintln!("\x1b[0mExecution failed at {}:{} because: {}", err.0.0, err.1, err.2);
+                        exit(1);
+                    },
                 }
 
             }
-            Err(err) => println!("Getting file contents failed with error: {}", err),
+            Err(err) => eprintln!("Getting file contents failed with error: {}", err),
         };
     }
 }
