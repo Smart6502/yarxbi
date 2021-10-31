@@ -167,10 +167,22 @@ fn evaluate_com(
             // Expected Next:
             // EXPRESSION
             match parse_and_eval_expression(&mut token_iter, &context) {
-                Ok(value::Value::String(value)) => println!("{}", value),
-                Ok(value::Value::Number(value)) => println!("{}", value),
-                Ok(value::Value::Bool(value)) => println!("{}", value),
+                Ok(value::Value::String(value)) => print!("{}", value),
+                Ok(value::Value::Number(value)) => print!("{}", value),
+                Ok(value::Value::Bool(value)) => print!("{}", value),
                 Err(_) => err!(line_number, pos, "PRINT must be followed by valid expression"),
+            }
+
+            while let Some(&&lexer::TokenAndPos(_, token::Token::Semicolon)) = token_iter.peek()
+            {
+                token_iter.next();
+
+                match parse_and_eval_expression(&mut token_iter, &context) {
+                    Ok(value::Value::String(value)) => print!("{}", value),
+                    Ok(value::Value::Number(value)) => print!("{}", value),
+                    Ok(value::Value::Bool(value)) => print!("{}", value),
+                    Err(_) => err!(line_number, pos, "PRINT must be followed by valid expression"),
+                }
             }
         }
 
@@ -401,6 +413,7 @@ fn parse_expression(
         match token_iter.peek() {
             Some(&&lexer::TokenAndPos(_, token::Token::Then)) |
             Some(&&lexer::TokenAndPos(_, token::Token::To)) |
+            Some(&&lexer::TokenAndPos(_, token::Token::Semicolon)) |
             Some(&&lexer::TokenAndPos(_, token::Token::Step)) |
             None => break,
             _ => {}

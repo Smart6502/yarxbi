@@ -4,6 +4,7 @@
 20 let j = 0
 30 while j < 5
 40 let j = j + 1
-50 print j
+50 print j ; " "
 60 wend
-70 next i
+70 print "\n"
+80 next i
