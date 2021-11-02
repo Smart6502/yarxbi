@@ -105,10 +105,22 @@ pub fn tokenize_line(line: &str) -> Result<LineOfCode, String> {
                         match token {
                             None => {
                                 if is_valid_identifier(&token_str) {
-                                    tokens.push(TokenAndPos(
-                                        pos,
-                                        token::Token::Variable(token_str.to_string()),
-                                    ))
+                                    if match tokens.last() {
+                                        Some(t) => t,
+                                        None => return Err(format!(
+                                            "Could not get last token at subcheck {}", pos
+                                        ))
+                                    }.1 == token::Token::Sub {
+                                        tokens.push(TokenAndPos(
+                                            pos,
+                                            token::Token::Srout(token_str.to_string())
+                                        ));
+                                    } else {
+                                        tokens.push(TokenAndPos(
+                                            pos,
+                                            token::Token::Variable(token_str.to_string()),
+                                        ));
+                                    }
                                 } else {
                                     return Err(format!(
                                         "Unimplemented token at {}:\t{}",

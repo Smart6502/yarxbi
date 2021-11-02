@@ -9,10 +9,10 @@ use std::{
 
 #[derive(Debug)]
 struct ForLoop {
-    line_no: lexer::LineNumber, // Jump?
-    pos: u32, // Token position of 'to'
-    slide: bool, // Condition symbol (gt/lt)
-    stes: bool // Try custom step?
+    line_no: lexer::LineNumber,
+    pos: u32,
+    slide: bool,
+    stes: bool
 }
 
 #[derive(Debug)]
@@ -22,10 +22,17 @@ struct WhileLoop {
 }
 
 #[derive(Debug)]
+struct Sub {
+    line_no: lexer::LineNumber,
+    ret_no: lexer::LineNumber,
+}
+
+#[derive(Debug)]
 struct Context {
-    variables: HashMap<String, value::Value>, // Variables
-    floops: HashMap<String, ForLoop>, // For loops
+    variables: HashMap<String, value::Value>,
+    floops: HashMap<String, ForLoop>,
     wloops: Vec<WhileLoop>,
+    subs: HashMap<String, Sub>,
 }
 
 impl Context {
@@ -34,6 +41,7 @@ impl Context {
             variables: HashMap::new(),
             floops: HashMap::new(),
             wloops: Vec::new(),
+            subs: HashMap::new(),
         }
     }
 }
@@ -69,30 +77,36 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
     // TODO: Feels hacky
     let mut line_has_goto = false;
 
+    let mut is_isub = false;
+
     loop {
-        let line_number = line_numbers[line_index];
-        let tokens = &lineno_to_code[line_number];
-        let mut token_iter = tokens.iter().peekable();
+        if !is_isub {
+            let line_number = line_numbers[line_index];
+            let tokens = &lineno_to_code[line_number];
+            let mut token_iter = tokens.iter().peekable();
 
-        // println!("Looking at line: {:?}", line_number);
-        if !tokens.is_empty() {
-            let lexer::TokenAndPos(pos, ref token) = *token_iter.next().unwrap();
-            // Set default value
-            line_has_goto = false;
+            // println!("Looking at line: {:?}", line_number);
+            
+            if !tokens.is_empty() {
+                let lexer::TokenAndPos(pos, ref token) = *token_iter.next().unwrap();
+                // Set default value
+                line_has_goto = false;
 
-            match evaluate_com(&mut context,
-                        &lineno_to_code,
-                        &line_map,
-                        &mut line_index,
-                        &mut line_has_goto,
-                        token_iter,
-                        line_number,
-                        pos,
-                        token
-            ) {
-                Ok(_) => {},
-                Err(e) => return Err(e),
-            };
+                match evaluate_com(&mut context,
+                            &lineno_to_code,
+                            &line_map,
+                            &mut line_index,
+                            &mut line_has_goto,
+                            &mut is_isub,
+                            token_iter,
+                            line_number,
+                            pos,
+                            token,
+                ) {
+                    Ok(_) => {},
+                    Err(e) => return Err(e),
+                };
+            }
         }
 
         if !line_has_goto {
@@ -112,6 +126,7 @@ fn evaluate_com(
     line_map: &BTreeMap<&lexer::LineNumber, usize>,
     line_index: &mut usize,
     line_has_goto: &mut bool,
+    is_isub: &mut bool,
     mut token_iter: Peekable<Iter<'_, lexer::TokenAndPos>>,
     line_number: &&lexer::LineNumber,
     pos: u32,
@@ -393,8 +408,40 @@ fn evaluate_com(
 
                 Err(_) => err!(line_number, pos, "Invalid boolean expression"),
 
-                _ => err!(line_number, pos, "Invalid expression type (expected boolean)"),
+                _ => err!(line_number, pos, "Invalid expression"),
             }
+        }
+
+        token::Token::Sub => {
+            if *is_isub {
+                err!(line_number, pos, "Subroutines cannot be nested");
+            }
+
+            let ident = match match token_iter.next() {
+                Some(x) => x,
+                None => err!(line_number, pos, "Could not get subroutine identifier"),
+            }.1.clone() {
+                token::Token::Srout(s) => s,
+                _ => err!(line_number, pos, "Expected subroutine identifier"),
+            };
+
+            if context.subs.contains_key(&ident) { // Skip definition if it already exists
+                match line_map.get(&match context.subs.get(&ident) {
+                    Some(x) => x,
+                    None => err!(line_number, pos, ""),
+                }.ret_no) {
+                    Some(index) => *line_index = *index,
+                    None => err!(line_number, pos, "Could not skip to subroutine end"),
+                }
+            } else { // Wait for return
+                *is_isub = true;
+            }
+        }
+
+        token::Token::Return => {
+            // impl return
+
+            
         }
 
         _ => err!(line_number, pos, "Invalid syntax"),

@@ -25,7 +25,8 @@ fn main() {
                     match result {
                         Ok(x) => {
                             if x.line_number.0 != u32::MAX - 1 {
-                                code_lines.push(x)
+                                code_lines.push(x.clone());
+                                //println!("Tokens: {:?}", x);
                             }
                         },
                         Err(e) => {
@@ -36,9 +37,9 @@ fn main() {
                 }
 
                 match evaluator::evaluate(code_lines) {
-                    Ok(msg) => println!("\x1b[0m{} in {:?}", msg, ist.elapsed()),
+                    Ok(msg) => println!("{} in {:?}", msg, ist.elapsed()),
                     Err(err) => {
-                        eprintln!("\x1b[0mExecution failed at {}:{} because: {}", err.0.0, err.1, err.2);
+                        eprintln!("Execution failed at {}:{} because: {}", err.0.0, err.1, err.2);
                         exit(1);
                     },
                 }
