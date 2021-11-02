@@ -105,12 +105,14 @@ pub fn tokenize_line(line: &str) -> Result<LineOfCode, String> {
                         match token {
                             None => {
                                 if is_valid_identifier(&token_str) {
-                                    if match tokens.last() {
+                                    let last = match tokens.last() {
                                         Some(t) => t,
                                         None => return Err(format!(
                                             "Could not get last token at subcheck {}", pos
                                         ))
-                                    }.1 == token::Token::Sub {
+                                    };
+                                    
+                                    if last.1 == token::Token::Sub || last.1 == token::Token::Gosub {
                                         tokens.push(TokenAndPos(
                                             pos,
                                             token::Token::Srout(token_str.to_string())

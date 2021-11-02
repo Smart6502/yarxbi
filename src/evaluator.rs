@@ -28,11 +28,18 @@ struct Sub {
 }
 
 #[derive(Debug)]
+struct Subsr {
+    call_no: lexer::LineNumber,
+    sident: String,
+}
+
+#[derive(Debug)]
 struct Context {
-    variables: HashMap<String, value::Value>,
-    floops: HashMap<String, ForLoop>,
-    wloops: Vec<WhileLoop>,
-    subs: HashMap<String, Sub>,
+    variables: HashMap<String, value::Value>,   // Variables
+    floops: HashMap<String, ForLoop>,           // For loops
+    wloops: Vec<WhileLoop>,                     // While loops
+    subs: HashMap<String, Sub>,                 // Subroutine definitions
+    subsr: Vec<Subsr>,                          // EIP subroutines
 }
 
 impl Context {
@@ -42,6 +49,7 @@ impl Context {
             floops: HashMap::new(),
             wloops: Vec::new(),
             subs: HashMap::new(),
+            subsr: Vec::new(),
         }
     }
 }
@@ -77,10 +85,9 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
     // TODO: Feels hacky
     let mut line_has_goto = false;
 
-    let mut is_isub = false;
+    let mut is_isub: Option<(String, lexer::LineNumber)> = None;
 
     loop {
-        if !is_isub {
             let line_number = line_numbers[line_index];
             let tokens = &lineno_to_code[line_number];
             let mut token_iter = tokens.iter().peekable();
@@ -92,9 +99,12 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                 // Set default value
                 line_has_goto = false;
 
+                if is_isub == None || *token == token::Token::Return {
+
                 match evaluate_com(&mut context,
                             &lineno_to_code,
                             &line_map,
+                            &line_numbers,
                             &mut line_index,
                             &mut line_has_goto,
                             &mut is_isub,
@@ -105,9 +115,8 @@ pub fn evaluate(code_lines: Vec<lexer::LineOfCode>) -> Result<String, (lexer::Li
                 ) {
                     Ok(_) => {},
                     Err(e) => return Err(e),
-                };
+                }};
             }
-        }
 
         if !line_has_goto {
             line_index += 1;
@@ -124,9 +133,10 @@ fn evaluate_com(
     context: &mut Context,
     lineno_to_code: &BTreeMap<&lexer::LineNumber, &Vec<lexer::TokenAndPos>>,
     line_map: &BTreeMap<&lexer::LineNumber, usize>,
+    line_numbers: &Vec<&&lexer::LineNumber>,
     line_index: &mut usize,
     line_has_goto: &mut bool,
-    is_isub: &mut bool,
+    is_isub: &mut Option<(String, lexer::LineNumber)>,
     mut token_iter: Peekable<Iter<'_, lexer::TokenAndPos>>,
     line_number: &&lexer::LineNumber,
     pos: u32,
@@ -412,14 +422,41 @@ fn evaluate_com(
             }
         }
 
+        token::Token::Gosub => {
+            let ident = match match token_iter.next() {
+                Some(x) => x,
+                None => err!(line_number, pos, "Cannot get subroutine identifier"),
+            }.1.clone() {
+                token::Token::Srout(s) => s,
+                _ => err!(line_number, pos, "Expected subroutine identifier"),
+            };
+
+            if context.subs.contains_key(&ident) {
+                context.subsr.push(Subsr {
+                    call_no: **line_number,
+                    sident: ident.clone(),
+                });
+
+                match line_map.get(&match context.subs.get(&ident) {
+                    Some(sub) => sub.line_no,
+                    None => err!(line_number, pos, "Cannot get jumping reference"),
+                }) {
+                    Some(index) => *line_index = *index,
+                    None => err!(line_number, pos, "Cannot jump to subroutine"),
+                }
+            } else {
+                err!(line_number, pos, "Subroutine definition uninitialised");
+            }
+        }
+
         token::Token::Sub => {
-            if *is_isub {
+            if *is_isub != None {
                 err!(line_number, pos, "Subroutines cannot be nested");
             }
 
             let ident = match match token_iter.next() {
                 Some(x) => x,
-                None => err!(line_number, pos, "Could not get subroutine identifier"),
+                None => err!(line_number, pos, "Cannot get subroutine identifier"),
             }.1.clone() {
                 token::Token::Srout(s) => s,
                 _ => err!(line_number, pos, "Expected subroutine identifier"),
@@ -431,17 +468,39 @@ fn evaluate_com(
                     None => err!(line_number, pos, ""),
                 }.ret_no) {
                     Some(index) => *line_index = *index,
-                    None => err!(line_number, pos, "Could not skip to subroutine end"),
+                    None => err!(line_number, pos, "Cannot skip to subroutine end"),
                 }
             } else { // Wait for return
-                *is_isub = true;
+                *is_isub = Some((ident, **line_number));
             }
         }
 
         token::Token::Return => {
-            // impl return
+            match &*is_isub {
+                Some(x) => {
+                    match context.subs.insert(x.0.clone(), Sub {
+                        line_no: x.1,
+                        ret_no: **line_numbers[*line_index + 1],
+                    }) {
+                        Some(_) => {},
+                        None => {},
+                    };
 
-            
+                    *is_isub = None;
+                },
+
+                None => {
+                    let last = match context.subsr.last() {
+                        Some(sr) => sr,
+                        None => err!(line_number, pos, "Cannot find last subroutine call"),
+                    };
+        
+                    match line_map.get(&last.call_no) {
+                        Some(index) => *line_index = *index + 1,
+                        None => err!(line_number, pos, "Cannot jump back to subroutine call"),
+                    }        
+                }
+            }
         }
 
         _ => err!(line_number, pos, "Invalid syntax"),
